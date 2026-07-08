@@ -1,0 +1,20 @@
+# ------------------------------------------------------------
+# Terraform
+# ------------------------------------------------------------
+
+# Local Terraform working directory (contains plugins and modules)
+.terraform/
+
+# Lock file for managing provider versions
+# Note: HashiCorp recommends committing this file to version control,
+# but if you prefer to exclude it, keep this line active.
+.terraform.lock.hcl
+
+# Terraform state files (contains sensitive data and infrastructure status)
+terraform.tfstate
+terraform.tfstate.*
+
+# Variables files (often contain passwords, tokens, and secrets)
+terraform.tfvars
+*.tfvars
+
