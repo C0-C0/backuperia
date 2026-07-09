@@ -51,3 +51,10 @@ output "ansible_token_secret" {
   value     = proxmox_virtual_environment_user_token.ansible.value    # the secret UUID
   sensitive = true
 }
+
+
+What i need installed:
+
+sudo apt install ansible
+ansible-galaxy collection install community.proxmox
+sudo python3 -m pip install --break-system-packages 'proxmoxer>=2.3' requests
