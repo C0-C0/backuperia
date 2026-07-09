@@ -1,0 +1,6 @@
+# Ansible Galaxy requirements for the backup playbook.
+# Baked into the runner image by the Dockerfile; kept here for reproducibility
+# and so Semaphore can also auto-install it if you point a template at it.
+collections:
+  - name: community.proxmox
+    # community.proxmox 2.x requires ansible-core >= 2.17
