@@ -19,5 +19,11 @@ terraform {
       # Allow compatible provider versions within the 0.111 release series.
       version = "~> 0.111"
     }
+
+    # HashiCorp Archive provider for handling archive files.
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.7"
+    }
   }
 }
