@@ -98,17 +98,17 @@ resource "null_resource" "install_dependencies" {
 
   provisioner "remote-exec" {
     inline = [
-      "pct exec 201 -- apt-get update",
-      "pct exec 201 -- apt-get install -y locales",
-      "pct exec 201 -- locale-gen en_US.UTF-8",
-      "pct exec 201 -- update-locale LANG=en_US.UTF-8",
-      "pct exec 201 -- systemctl enable --now ssh",
-      "for i in $(seq 1 30); do pct exec 201 -- ping -c1 -W1 8.8.8.8 >/dev/null 2>&1 && break; sleep 2; done",
-      "pct exec 201 -- apt-get install -y software-properties-common",
-      "pct exec 201 -- add-apt-repository --yes --update ppa:ansible/ansible",
-      "pct exec 201 -- apt-get install -y ansible python3-pip",
-      "pct exec 201 -- ansible-galaxy collection install community.proxmox",
-      "pct exec 201 -- python3 -m pip install --break-system-packages proxmoxer requests"
+      "pct exec ${var.acn_vm_id} -- apt-get update",
+      "pct exec ${var.acn_vm_id} -- apt-get install -y locales",
+      "pct exec ${var.acn_vm_id} -- locale-gen en_US.UTF-8",
+      "pct exec ${var.acn_vm_id} -- update-locale LANG=en_US.UTF-8",
+      "pct exec ${var.acn_vm_id} -- systemctl enable --now ssh",
+      "for i in $(seq 1 30); do pct exec ${var.acn_vm_id} -- ping -c1 -W1 8.8.8.8 >/dev/null 2>&1 && break; sleep 2; done",
+      "pct exec ${var.acn_vm_id} -- apt-get install -y software-properties-common",
+      "pct exec ${var.acn_vm_id} -- add-apt-repository --yes --update ppa:ansible/ansible",
+      "pct exec ${var.acn_vm_id} -- apt-get install -y ansible python3-pip",
+      "pct exec ${var.acn_vm_id} -- ansible-galaxy collection install community.proxmox",
+      "pct exec ${var.acn_vm_id} -- python3 -m pip install --break-system-packages proxmoxer requests"
     ]
   }
 }
