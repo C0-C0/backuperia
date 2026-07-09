@@ -1,4 +1,6 @@
 # Secrets and runtime data — never commit
-.env
+config.json
+semaphore.env
+*.sqlite
+*.boltdb
 semaphore-data/
-semaphore-db/
