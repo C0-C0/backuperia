@@ -10,16 +10,18 @@
 #   SEM_ADMIN_LOGIN=admin SEM_ADMIN_PASSWORD='CHANGE_ME' \
 #   ./bootstrap.sh
 #
-# By default Semaphore uses the LOCAL copy of this repo already on the host
-# (a file:// URL to the git checkout this script lives in) — nothing is fetched
-# from GitHub. Override GIT_URL only if you want it to pull from a remote.
+# By default Semaphore uses the LOCAL FILES already on the host, IN PLACE — the
+# repository is registered as a bare filesystem path (not file://), so Semaphore
+# runs the working tree directly: no clone, no commit needed, edits to
+# inventory.yml/VM_Backup.yml take effect on the next Run. Nothing is fetched
+# from GitHub. Override GIT_URL only if you want it to pull from a remote instead.
 #
 # Optional:
 #   PROJECT_NAME       (default: Backuperia)
 #   TEMPLATE_NAME      (default: VM-Backup)
 #   PLAYBOOK           (default: 03_Ansible/VM_Backup.yml)
 #   INVENTORY_PATH     (default: 03_Ansible/inventory.yml)
-#   GIT_URL            (default: file://<local repo root>)  -- remote optional
+#   GIT_URL            (default: <local repo root> as a filesystem path) -- remote optional
 #   GIT_SSH_KEY_FILE   private key, only for a remote private repo
 #   PROXMOX_TOKEN_SECRET  injected into the Semaphore Environment (encrypted)
 set -euo pipefail
@@ -36,7 +38,9 @@ SEM_URL="${SEM_URL:-http://localhost:3000}"
 SEM_WEB_URL="${SEM_WEB_URL:-$SEM_URL}"
 SEM_ADMIN_LOGIN="${SEM_ADMIN_LOGIN:-admin}"
 SEM_ADMIN_PASSWORD="${SEM_ADMIN_PASSWORD:?set SEM_ADMIN_PASSWORD}"
-GIT_URL="${GIT_URL:-file://$REPO_ROOT}"
+# Bare path (no file://) => Semaphore "local filesystem" repo: used in place,
+# working tree, no clone. A file:// URL would instead clone (committed only).
+GIT_URL="${GIT_URL:-$REPO_ROOT}"
 GIT_BRANCH="${GIT_BRANCH:-main}"
 PROJECT_NAME="${PROJECT_NAME:-Backuperia}"
 TEMPLATE_NAME="${TEMPLATE_NAME:-VM-Backup}"
