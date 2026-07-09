@@ -30,6 +30,10 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(git -C "$HERE" rev-parse --show-toplevel 2>/dev/null || cd "$HERE/../.." && pwd)"
 
 SEM_URL="${SEM_URL:-http://localhost:3000}"
+# API calls go to SEM_URL (localhost, always reachable on the host). The URL we
+# tell the user to open is SEM_WEB_URL — the container's real address — since
+# 'localhost' only works from inside the container.
+SEM_WEB_URL="${SEM_WEB_URL:-$SEM_URL}"
 SEM_ADMIN_LOGIN="${SEM_ADMIN_LOGIN:-admin}"
 SEM_ADMIN_PASSWORD="${SEM_ADMIN_PASSWORD:?set SEM_ADMIN_PASSWORD}"
 GIT_URL="${GIT_URL:-file://$REPO_ROOT}"
@@ -157,6 +161,6 @@ else
 fi
 
 echo
-echo "Done. Open $SEM_URL → project '$PROJECT_NAME' → template '$TEMPLATE_NAME' is ready to Run."
+echo "Done. Open $SEM_WEB_URL → project '$PROJECT_NAME' → template '$TEMPLATE_NAME' is ready to Run."
 [[ -z "$PROXMOX_TOKEN_SECRET" ]] && \
   echo "Note: set PROXMOX_TOKEN_SECRET (env or /etc/semaphore/semaphore.env) before the first real run."

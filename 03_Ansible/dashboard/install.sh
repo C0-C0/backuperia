@@ -59,20 +59,33 @@ if [[ -f "$CONFIG_DIR/config.json" ]] && grep -q '"bolt"' "$CONFIG_DIR/config.js
   echo "    found legacy bolt config — backing up and regenerating as sqlite"
   mv "$CONFIG_DIR/config.json" "$CONFIG_DIR/config.json.bolt.bak"
 fi
+# Detect the container's primary IP so the web UI's links/API base match the
+# address you actually browse to (a localhost web_host renders a blank page).
+# Override with:  WEB_HOST=http://my.host:3000 ./install.sh
+HOST_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+WEB_HOST="${WEB_HOST:-http://${HOST_IP:-localhost}:3000}"
+
 if [[ ! -f "$CONFIG_DIR/config.json" ]]; then
-  # Copy the template, stripping "//" comment keys and filling real secrets.
-  python3 - "$HERE/config.json.example" "$CONFIG_DIR/config.json" <<'PY'
+  # Copy the template, stripping "//" comment keys, filling secrets + web_host.
+  WEB_HOST="$WEB_HOST" python3 - "$HERE/config.json.example" "$CONFIG_DIR/config.json" <<'PY'
 import json, sys, base64, os
 src, dst = sys.argv[1], sys.argv[2]
 raw = [l for l in open(src) if not l.lstrip().startswith('"//')]
 cfg = json.loads("".join(raw))
 for k in ("cookie_hash","cookie_encryption","access_key_encryption"):
     cfg[k] = base64.b64encode(os.urandom(32)).decode()
+cfg["web_host"] = os.environ["WEB_HOST"]
 json.dump(cfg, open(dst,"w"), indent=2)
 PY
-  echo "    wrote $CONFIG_DIR/config.json with fresh random secrets"
+  echo "    wrote $CONFIG_DIR/config.json (web_host=$WEB_HOST) with fresh secrets"
 else
-  echo "    $CONFIG_DIR/config.json exists — left as-is"
+  # Config already exists: only correct a localhost web_host, leave the rest.
+  if grep -q '"web_host": *"http://localhost' "$CONFIG_DIR/config.json"; then
+    sed -i "s#\"web_host\": *\"http://localhost:3000\"#\"web_host\": \"$WEB_HOST\"#" "$CONFIG_DIR/config.json"
+    echo "    updated existing config web_host -> $WEB_HOST"
+  else
+    echo "    $CONFIG_DIR/config.json exists — left as-is"
+  fi
 fi
 [[ -f "$CONFIG_DIR/semaphore.env" ]] || cp "$HERE/semaphore.env.example" "$CONFIG_DIR/semaphore.env"
 chown -R semaphore:semaphore "$DATA_DIR" "$CONFIG_DIR"
@@ -83,7 +96,8 @@ install -m 0644 "$HERE/semaphore.service" /etc/systemd/system/semaphore.service
 systemctl daemon-reload
 systemctl enable --now semaphore
 echo
-echo "Semaphore is running on port 3000 (see web_host in $CONFIG_DIR/config.json)."
+echo "Semaphore is running. Open the dashboard at:  ${WEB_HOST}"
+echo "(web_host in $CONFIG_DIR/config.json — re-run with WEB_HOST=... to change it.)"
 
 # ==> 6/6 (optional) Admin user + auto-provision the VM-Backup template.
 # Set SEM_ADMIN_PASSWORD to have install.sh finish the whole setup so the
@@ -102,7 +116,7 @@ if [[ -n "${SEM_ADMIN_PASSWORD:-}" ]]; then
   # Seed project/repo/inventory/environment/template via the API.
   # Pull the Proxmox token from semaphore.env if present so it lands in the UI env.
   [[ -f "$CONFIG_DIR/semaphore.env" ]] && . "$CONFIG_DIR/semaphore.env" 2>/dev/null || true
-  SEM_URL="${SEM_URL:-http://localhost:3000}" \
+  SEM_URL="${SEM_URL:-http://localhost:3000}" SEM_WEB_URL="$WEB_HOST" \
   SEM_ADMIN_LOGIN="$SEM_ADMIN_LOGIN" SEM_ADMIN_PASSWORD="$SEM_ADMIN_PASSWORD" \
   GIT_URL="${GIT_URL:-}" GIT_BRANCH="${GIT_BRANCH:-main}" \
   GIT_SSH_KEY_FILE="${GIT_SSH_KEY_FILE:-}" \
