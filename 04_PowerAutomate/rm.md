@@ -45,11 +45,11 @@ Display.ShowMessageDialog.ShowMessage Title: $'''SSH Public Key''' Message: $'''
  
 Auf dem Proxmox-Host ausfuehren:
 mkdir -p /root/.ssh
-echo \"HIER_DEN_KEY_VON_UNTEN_EINFUEGEN\" >> /root/.ssh/authorized_keys
+echo %PublicKeyInhalt% >> /root/.ssh/authorized_keys
 chmod 600 /root/.ssh/authorized_keys
  
 Public Key:
-%PublicKeyInhalt%''' Icon: Display.Icon.Information Buttons: Display.Buttons.OK DefaultButton: Display.DefaultButton.Button1 IsTopMost: False ButtonPressed=> ButtonPressed
+''' Icon: Display.Icon.Information Buttons: Display.Buttons.OK DefaultButton: Display.DefaultButton.Button1 IsTopMost: False ButtonPressed=> ButtonPressed
 # Schritt 4: terraform.tfvars aus Vorlage erzeugen
 # Überspringen wenn terraform.tfvars schon konfiguriert wurde
 IF (File.IfFile.Exists File: $'''%TF_WORKDIR%\\terraform.tfvars''') THEN
@@ -69,8 +69,8 @@ ELSE
     Text.Replace.ReplaceText Text: tfvarsFilled TextToFind: $'''proxmox_root_password = \"\"''' IgnoreCase: False ReplaceWith: $'''proxmox_root_password = \"%proxmox_root_password%\"''' ActivateEscapeSequences: False ComparisonType: Text.TextComparisonType.Ordinal Result=> tfvarsFilled
     Display.InputDialog Title: $'''Proxmox SSH Endpoint''' Message: $'''Bitte den SSH Endpoint (IP/Host des Proxmox) angeben.''' InputType: Display.InputType.SingleLine IsTopMost: False UserInput=> proxmox_ssh_endpoint ButtonPressed=> ButtonPressed2
     Text.Replace.ReplaceText Text: tfvarsFilled TextToFind: $'''proxmox_ssh_endpoint  = \"\"''' IgnoreCase: False ReplaceWith: $'''proxmox_ssh_endpoint  = \"%proxmox_ssh_endpoint%\"''' ActivateEscapeSequences: False ComparisonType: Text.TextComparisonType.Ordinal Result=> tfvarsFilled
-    Display.InputDialog Title: $'''Proxmox SSH Key Path''' Message: $'''Bitte den Pfad zum privaten SSH Key angeben.''' InputType: Display.InputType.SingleLine IsTopMost: False UserInput=> proxmox_ssh_key_path ButtonPressed=> ButtonPressed2
-    Text.Replace.ReplaceText Text: tfvarsFilled TextToFind: $'''proxmox_ssh_key_path  = \"\"''' IgnoreCase: False ReplaceWith: $'''proxmox_ssh_key_path  = \"%proxmox_ssh_key_path%\"''' ActivateEscapeSequences: False ComparisonType: Text.TextComparisonType.Ordinal Result=> tfvarsFilled
+    Text.Replace.ReplaceText Text: UserProfile TextToFind: $'''\\''' IgnoreCase: False ReplaceWith: $'''/''' ActivateEscapeSequences: False ComparisonType: Text.TextComparisonType.Ordinal Result=> UserProfileSlash
+    Text.Replace.ReplaceText Text: tfvarsFilled TextToFind: $'''proxmox_ssh_key_path  = \"\"''' IgnoreCase: False ReplaceWith: $'''proxmox_ssh_key_path  = \"%UserProfileSlash%/.ssh/id_ed25519\"''' ActivateEscapeSequences: False ComparisonType: Text.TextComparisonType.Ordinal Result=> tfvarsFilled
     File.WriteText File: $'''%TF_WORKDIR%\\terraform.tfvars''' TextToWrite: tfvarsFilled AppendNewLine: True IfFileExists: File.IfFileExists.Overwrite Encoding: File.FileEncoding.UTF8
 END
 # Schritt 5: inventory.yml aus Vorlage erzeugen (Ansible)
