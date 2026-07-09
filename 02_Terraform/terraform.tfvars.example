@@ -10,7 +10,7 @@ acn_os_template_file = "local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst
 acn_root_password = ""
 acn_memory_size = 4096
 acn_storage_size = 20
-acn_vm_id = 201
+acn_vm_id = 
 
 # Proxmox related variables
 proxmox_api_endpoint  = "https://xzess.ooguy.com:8006"

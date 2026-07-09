@@ -1,0 +1,18 @@
+all:
+  children:
+    proxmox_hosts:
+      hosts:
+        pve:
+          # IP Address Proxmox Host
+          ansible_host: 
+          # Proxmox Node Name eg pve
+          proxmox_node: 
+      vars:
+        # Backup Storage Name eg local, usbBCK
+        backup_storage: 
+        # Proxmox Username connected to API eg "user@pve"
+        proxmox_api_user: ""
+        # Proxmox API Token ID eg "ansible"
+        proxmox_api_token_id: ""
+        # Proxmox API Token Secret
+        proxmox_api_token_secret: ""
