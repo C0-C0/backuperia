@@ -18,3 +18,7 @@ terraform.tfstate.*
 terraform.tfvars
 *.tfvars
 
+# Ansible playbooks staging dir — populated by PAD from 03_Ansible/ at run time
+# and packed into playbooks.tar.gz. Generated, so not tracked.
+02_Terraform/playbooks/
+

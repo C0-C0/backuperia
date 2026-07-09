@@ -11,7 +11,7 @@ with an embedded SQLite file (no Docker, no Postgres).
 ```
 semaphore (systemd service, native binary)
   ├─ Schedule (cron) ─▶ Task Template ─▶ ansible-playbook 03_Ansible/VM_Backup.yml
-  ├─ Repository        (git clone of this repo)
+  ├─ Repository        (this repo, used in place — local filesystem, no clone)
   ├─ Inventory         (03_Ansible/inventory.yml)
   ├─ Environment       (secret: PROXMOX_TOKEN_SECRET)
   └─ Store             (SQLite file at /var/lib/semaphore/database.sqlite)
@@ -87,9 +87,16 @@ Open `http://<host>:3000` and log in.
 already there (project, git key, repository, inventory, environment, task
 template) the first time you log in — no clicking through the UI.
 
-It uses the **local copy of this repo already on the host** (a `file://` URL to
-this git checkout) — nothing is fetched from GitHub. Semaphore clones committed
-content, so make sure your changes are committed before running.
+It registers this repo as a **local-filesystem repository** — a bare host path
+(e.g. `/opt/backuperia`), *not* a `file://` URL. Semaphore runs the files **in
+place, from the working tree**: no clone, no commit needed. Edit
+`inventory.yml`/`VM_Backup.yml` on the host and the change takes effect on the
+next Run. Nothing is fetched from GitHub.
+
+Because the playbook runs as the unprivileged **`semaphore`** user, that user
+needs read access to the repo. `install.sh` grants it automatically (step 5)
+with a `semaphore`-scoped ACL, and traverse on the parent dirs — so the repo can
+even live under `/root`. Override the path with `REPO_PATH=/opt/backuperia`.
 
 Do it in one shot on a fresh host by passing just the admin password to
 `install.sh`:
@@ -120,18 +127,18 @@ schedule.
 ### Manual (web UI)
 
 1. **Create Project** → name it `Backuperia`.
-2. **Key Store** → add keys the other pieces reference:
-   - Git access: an **SSH Key** (private repo) or a **None** key (public/`file://`).
-3. **Repository** → your repo URL, branch `main`, the git key above.
+2. **Key Store** → add a **None**-type key (named `git`); a local-filesystem
+   repo needs no credentials.
+3. **Repository** → **URL = the host path to this repo** (bare path, e.g.
+   `/opt/backuperia` — *not* `file://`, which would clone), branch `main`, the
+   `git` key above. Semaphore runs the files in place from the working tree.
 4. **Inventory** → type **File**, path `03_Ansible/inventory.yml`.
-5. **Environment** → this is where the secret lives. In **Environment variables**
-   (not Extra variables) put:
-   ```json
-   { "PROXMOX_TOKEN_SECRET": "your-token-secret-uuid" }
-   ```
-   `inventory.yml` reads it via `lookup('env', 'PROXMOX_TOKEN_SECRET')`. Semaphore
-   stores it encrypted. (Alternatively, set it once for the whole host in
-   `/etc/semaphore/semaphore.env` — the systemd unit loads that file.)
+5. **Environment** → create one (named `backuperia`); it can be empty. The
+   Proxmox token secret is entered **directly in `03_Ansible/inventory.yml`**
+   (`proxmox_api_token_secret:`) in this setup, so no env var is needed. (If you
+   prefer to keep the secret out of the file, put
+   `{ "PROXMOX_TOKEN_SECRET": "..." }` here instead and change the inventory
+   field to `"{{ lookup('env','PROXMOX_TOKEN_SECRET') }}"`.)
 6. **Task Template** →
    - Playbook: `03_Ansible/VM_Backup.yml`
    - Inventory / Repository / Environment: the ones above.

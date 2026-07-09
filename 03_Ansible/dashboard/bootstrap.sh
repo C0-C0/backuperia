@@ -19,17 +19,19 @@
 # Optional:
 #   PROJECT_NAME       (default: Backuperia)
 #   TEMPLATE_NAME      (default: VM-Backup)
-#   PLAYBOOK           (default: 03_Ansible/VM_Backup.yml)
-#   INVENTORY_PATH     (default: 03_Ansible/inventory.yml)
-#   GIT_URL            (default: <local repo root> as a filesystem path) -- remote optional
+#   PLAYBOOK           (default: VM_Backup.yml, relative to the deploy dir)
+#   INVENTORY_PATH     (default: inventory.yml, relative to the deploy dir)
+#   GIT_URL            (default: the deploy dir, e.g. /etc/ansible) -- remote optional
 #   GIT_SSH_KEY_FILE   private key, only for a remote private repo
 #   PROXMOX_TOKEN_SECRET  injected into the Semaphore Environment (encrypted)
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Local checkout this repo lives in — used so Semaphore runs the files already
-# on the host instead of cloning from GitHub.
-REPO_ROOT="$(git -C "$HERE" rev-parse --show-toplevel 2>/dev/null || cd "$HERE/../.." && pwd)"
+# Directory the Ansible files were deployed to — the parent of this dashboard
+# folder (VM_Backup.yml and inventory.yml sit directly in it). In the container
+# Terraform extracts them to /etc/ansible, so this is /etc/ansible; Semaphore
+# runs the files there in place (local filesystem repo, no clone from GitHub).
+ANSIBLE_ROOT="$(cd "$HERE/.." && pwd)"
 
 SEM_URL="${SEM_URL:-http://localhost:3000}"
 # API calls go to SEM_URL (localhost, always reachable on the host). The URL we
@@ -40,12 +42,12 @@ SEM_ADMIN_LOGIN="${SEM_ADMIN_LOGIN:-admin}"
 SEM_ADMIN_PASSWORD="${SEM_ADMIN_PASSWORD:?set SEM_ADMIN_PASSWORD}"
 # Bare path (no file://) => Semaphore "local filesystem" repo: used in place,
 # working tree, no clone. A file:// URL would instead clone (committed only).
-GIT_URL="${GIT_URL:-$REPO_ROOT}"
+GIT_URL="${GIT_URL:-$ANSIBLE_ROOT}"
 GIT_BRANCH="${GIT_BRANCH:-main}"
 PROJECT_NAME="${PROJECT_NAME:-Backuperia}"
 TEMPLATE_NAME="${TEMPLATE_NAME:-VM-Backup}"
-PLAYBOOK="${PLAYBOOK:-03_Ansible/VM_Backup.yml}"
-INVENTORY_PATH="${INVENTORY_PATH:-03_Ansible/inventory.yml}"
+PLAYBOOK="${PLAYBOOK:-VM_Backup.yml}"
+INVENTORY_PATH="${INVENTORY_PATH:-inventory.yml}"
 GIT_SSH_KEY_FILE="${GIT_SSH_KEY_FILE:-}"
 PROXMOX_TOKEN_SECRET="${PROXMOX_TOKEN_SECRET:-}"
 

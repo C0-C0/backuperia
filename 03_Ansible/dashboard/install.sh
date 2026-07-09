@@ -3,11 +3,17 @@
 # Target: Debian/Ubuntu Linux (or WSL). Run from this folder:  sudo ./install.sh
 #
 # What it does:
-#   1. Installs system deps: ansible-core, python3 + pip, git, curl.
-#   2. Installs the Python + Galaxy deps the proxmox modules need.
-#   3. Downloads the Semaphore binary to /usr/local/bin.
-#   4. Creates the semaphore user, data dir, and a starter config.json.
-#   5. Installs the systemd service and (optionally) creates the admin user.
+#   1. Installs the extra system deps Semaphore itself needs: git, curl, jq, acl.
+#      (Ansible, python3-pip and the proxmox python/Galaxy deps are already
+#      installed in the container by Terraform — see 02_Terraform/main.tf.)
+#   2. Downloads the Semaphore binary to /usr/local/bin.
+#   3. Creates the semaphore user, data dir, and a starter config.json
+#      (web_host auto-set to this host's IP; sqlite store).
+#   4. Grants the semaphore user read access to this repo (local-filesystem repo,
+#      run in place — no clone/commit).
+#   5. Installs and starts the systemd service.
+#   6. (optional, if SEM_ADMIN_PASSWORD set) creates the admin user and
+#      provisions the VM-Backup project/template.
 set -euo pipefail
 
 SEMAPHORE_VERSION="${SEMAPHORE_VERSION:-2.18.23}"   # override: SEMAPHORE_VERSION=x.y.z ./install.sh
@@ -18,22 +24,19 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [[ $EUID -ne 0 ]]; then echo "Run with sudo."; exit 1; fi
 
-echo "==> 1/5 System packages"
+echo "==> 1/6 System packages"
+# Ansible, python3-pip and the proxmox python (proxmoxer/requests) + Galaxy
+# (community.proxmox) deps are already installed in the container by Terraform
+# (see 02_Terraform/main.tf, null_resource.install_dependencies). Here we only
+# add the extra tools Semaphore itself needs.
 if command -v apt-get >/dev/null; then
   apt-get update
-  apt-get install -y ansible-core python3 python3-pip git curl jq
+  apt-get install -y git curl jq acl
 else
-  echo "!! Non-apt system: install ansible-core, python3-pip, git, curl yourself, then re-run." >&2
+  echo "!! Non-apt system: install git, curl, jq, acl yourself, then re-run." >&2
 fi
 
-echo "==> 2/5 Python + Ansible Galaxy deps for the proxmox modules"
-pip3 install --break-system-packages 'proxmoxer>=2.3' requests 2>/dev/null \
-  || pip3 install 'proxmoxer>=2.3' requests
-# Install the collection globally so the semaphore user always finds it.
-ansible-galaxy collection install -r "${HERE}/requirements.yml" \
-  --collections-path /usr/share/ansible/collections
-
-echo "==> 3/5 Semaphore binary v${SEMAPHORE_VERSION}"
+echo "==> 2/6 Semaphore binary v${SEMAPHORE_VERSION}"
 arch="$(dpkg --print-architecture 2>/dev/null || uname -m)"
 case "$arch" in
   amd64|x86_64) arch=amd64 ;;
@@ -50,7 +53,7 @@ install -m 0755 "$tmp/semaphore" "$BIN"
 rm -rf "$tmp"
 echo "    installed: $($BIN version 2>/dev/null || echo "$BIN")"
 
-echo "==> 4/5 User, dirs, config"
+echo "==> 3/6 User, dirs, config"
 id -u semaphore >/dev/null 2>&1 || useradd --system --home "$DATA_DIR" --shell /usr/sbin/nologin semaphore
 mkdir -p "$CONFIG_DIR" "$DATA_DIR/tmp"
 # --- migrate a legacy bolt config.json to sqlite (bolt is no longer a valid
@@ -91,7 +94,42 @@ fi
 chown -R semaphore:semaphore "$DATA_DIR" "$CONFIG_DIR"
 chmod 600 "$CONFIG_DIR/config.json" "$CONFIG_DIR/semaphore.env"
 
-echo "==> 5/5 systemd service"
+echo "==> 4/6 Local-filesystem repo access for the semaphore runner"
+# Semaphore is configured (in bootstrap.sh) to use this repo as a LOCAL
+# FILESYSTEM repository — it runs the files in place (working tree, no clone,
+# no commit). The playbook runs as the unprivileged 'semaphore' user, so that
+# user must be able to traverse into and read the repo. We grant that with a
+# user-scoped ACL (semaphore only) rather than opening the tree world-readable.
+ANSIBLE_ROOT="$(cd "$HERE/.." && pwd)"   # parent of dashboard/ = deploy dir (/etc/ansible in the container)
+REPO_PATH="${REPO_PATH:-$ANSIBLE_ROOT}"  # override if the files live elsewhere
+grant_semaphore_read() {
+  local repo="$1"
+  if command -v setfacl >/dev/null; then
+    # read+traverse on the whole tree, and as the default for future files.
+    setfacl -R  -m u:semaphore:rX "$repo"
+    setfacl -R -d -m u:semaphore:rX "$repo"
+    # traverse-only (x) on each parent dir so 'semaphore' can reach the repo
+    # even if it lives under a 0700 home like /root. This exposes traversal,
+    # not listing, of those parents to the semaphore user.
+    local d; d="$(dirname "$repo")"
+    while [[ "$d" != "/" && -n "$d" ]]; do
+      setfacl -m u:semaphore:x "$d" 2>/dev/null || true
+      d="$(dirname "$d")"
+    done
+    echo "    granted semaphore rX (ACL) on $repo, +traverse on its parents"
+  else
+    chmod -R o+rX "$repo"
+    echo "    'acl' not available — used chmod o+rX (world-readable) on $repo"
+  fi
+}
+grant_semaphore_read "$REPO_PATH"
+if sudo -u semaphore test -r "$REPO_PATH/inventory.yml"; then
+  echo "    OK: semaphore can read $REPO_PATH"
+else
+  echo "    !! semaphore still cannot read $REPO_PATH — check parent dir perms" >&2
+fi
+
+echo "==> 5/6 systemd service"
 install -m 0644 "$HERE/semaphore.service" /etc/systemd/system/semaphore.service
 systemctl daemon-reload
 systemctl enable --now semaphore
@@ -101,8 +139,8 @@ echo "(web_host in $CONFIG_DIR/config.json — re-run with WEB_HOST=... to chang
 
 # ==> 6/6 (optional) Admin user + auto-provision the VM-Backup template.
 # Set SEM_ADMIN_PASSWORD to have install.sh finish the whole setup so the
-# playbook is already registered and ready to Run. Semaphore uses the LOCAL
-# copy of this repo on the host (file://) — nothing is pulled from GitHub.
+# playbook is already registered and ready to Run. Semaphore uses the repo's
+# files IN PLACE (local filesystem repo) — nothing is pulled from GitHub.
 #   sudo SEM_ADMIN_PASSWORD='S3cret!' ./install.sh
 if [[ -n "${SEM_ADMIN_PASSWORD:-}" ]]; then
   SEM_ADMIN_LOGIN="${SEM_ADMIN_LOGIN:-admin}"
@@ -118,7 +156,7 @@ if [[ -n "${SEM_ADMIN_PASSWORD:-}" ]]; then
   [[ -f "$CONFIG_DIR/semaphore.env" ]] && . "$CONFIG_DIR/semaphore.env" 2>/dev/null || true
   SEM_URL="${SEM_URL:-http://localhost:3000}" SEM_WEB_URL="$WEB_HOST" \
   SEM_ADMIN_LOGIN="$SEM_ADMIN_LOGIN" SEM_ADMIN_PASSWORD="$SEM_ADMIN_PASSWORD" \
-  GIT_URL="${GIT_URL:-}" GIT_BRANCH="${GIT_BRANCH:-main}" \
+  GIT_URL="${GIT_URL:-$REPO_PATH}" GIT_BRANCH="${GIT_BRANCH:-main}" \
   GIT_SSH_KEY_FILE="${GIT_SSH_KEY_FILE:-}" \
   PROXMOX_TOKEN_SECRET="${PROXMOX_TOKEN_SECRET:-}" \
     bash "$HERE/bootstrap.sh"
