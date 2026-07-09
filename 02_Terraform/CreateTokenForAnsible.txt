@@ -1,0 +1,53 @@
+terraform {
+  required_providers {
+    proxmox = {
+      source  = "bpg/proxmox"
+      version = "~> 0.66"
+    }
+  }
+}
+
+provider "proxmox" {
+  endpoint = "https://192.168.100.200:8006/"
+  insecure = true            # self-signed cert; flip once you have a trusted one
+
+  # Bootstrap auth — root password (or a pre-existing token) via env vars:
+  #   export PROXMOX_VE_USERNAME="root@pam"
+  #   export PROXMOX_VE_PASSWORD="..."
+}
+
+# A least-privilege role for taking backups
+resource "proxmox_virtual_environment_role" "backup" {
+  role_id = "AnsibleBackup"
+  privileges = [
+    "VM.Backup",
+    "Datastore.AllocateSpace",
+    "Datastore.Audit",
+    "VM.Audit",
+  ]
+}
+
+# The API token, tied to root@pam (or a dedicated user you also create)
+resource "proxmox_virtual_environment_user_token" "ansible" {
+  user_id    = "root@pam"
+  token_name = "ansible"
+  comment    = "Used by Ansible VM_Backup playbook"
+  # privilege_separation = true  # default; token needs its own ACL grant below
+}
+
+# Grant the role to the token across the datacenter
+resource "proxmox_virtual_environment_acl" "ansible_backup" {
+  token_id  = proxmox_virtual_environment_user_token.ansible.id
+  role_id   = proxmox_virtual_environment_role.backup.role_id
+  path      = "/"
+  propagate = true
+}
+
+output "ansible_token_id" {
+  value = proxmox_virtual_environment_user_token.ansible.id           # e.g. root@pam!ansible
+}
+
+output "ansible_token_secret" {
+  value     = proxmox_virtual_environment_user_token.ansible.value    # the secret UUID
+  sensitive = true
+}
