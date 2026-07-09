@@ -1,0 +1,26 @@
+# ------------------------------------------------------------
+# Variables
+# ------------------------------------------------------------
+
+# Ansible control-node related variables
+acn_cpu_cores = 2
+acn_host_name = "Backuperia"
+acn_os_type = "ubuntu"
+acn_os_template_file = "local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst"
+acn_root_password = ""
+acn_memory_size = 4096
+acn_storage_size = 20
+acn_vm_id = 201
+
+# Proxmox related variables
+proxmox_api_endpoint  = "https://xzess.ooguy.com:8006"
+proxmox_api_token     = ""
+proxmox_bridge_name   = "vmbr0"
+proxmox_datastore     = "local-lvm"
+proxmox_interface_name = "eth0"
+proxmox_node_name     = ""
+proxmox_root_password = ""
+proxmox_root_user     = "root"
+proxmox_ssh_endpoint  = ""
+proxmox_ssh_key_path  = ""
+proxmox_ssh_port      = 22
