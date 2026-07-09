@@ -3,15 +3,16 @@ all:
     proxmox_hosts:
       hosts:
         pve:
-          ansible_host: 192.168.100.200
-          proxmox_node: pve            # the node name as it appears in the PVE UI
-          vmids: [101, 102, 211]
+          # IP Address Proxmox Host
+          ansible_host: 
+          # Proxmox Node Name eg pve
+          proxmox_node: 
       vars:
-        backup_storage: usbBCK
-        # --- Proxmox API credentials (create an API token in the PVE UI) ---
-        # Datacenter > Permissions > API Tokens. Format: user@realm + token id.
-        proxmox_api_user: "ansible@pve"
-        proxmox_api_token_id: "ansible"
-        # Enter the real token secret here when you upload; keep this placeholder
-        # in the committed copy so the secret never lands in git.
-        proxmox_api_token_secret: "a39918e5-6d49-4d74-a7fd-224a7964359b"
+        # Backup Storage Name eg local, usbBCK
+        backup_storage: 
+        # Proxmox Username connected to API eg "user@pve"
+        proxmox_api_user: ""
+        # Proxmox API Token ID eg "ansible"
+        proxmox_api_token_id: ""
+        # Proxmox API Token Secret
+        proxmox_api_token_secret: ""
