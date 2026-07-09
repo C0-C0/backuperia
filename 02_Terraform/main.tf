@@ -112,3 +112,75 @@ resource "null_resource" "install_dependencies" {
     ]
   }
 }
+
+
+# -----------------------------------------------------------------------------
+# Ansible Playbooks Deployment
+# -----------------------------------------------------------------------------
+# This resource transfers the compressed Ansible playbooks archive to the
+# Proxmox VE host and deploys it into the target LXC container.
+#
+# The resource is executed only after the required dependencies have been
+# installed inside the container and the playbooks archive has been created.
+#
+# A SHA-256 checksum of the archive is used as a trigger to ensure that the
+# deployment is automatically repeated whenever the contents of the local
+# 'playbooks' directory change.
+#
+# The following actions are performed:
+#   - Wait until the dependencies installation has completed
+#   - Wait until the playbooks archive has been generated
+#   - Detect changes using the archive SHA-256 checksum
+#   - Connect to the Proxmox VE host via SSH
+#   - Upload the playbooks archive to the Proxmox host
+#   - Copy the archive into the target LXC container
+#   - Remove any existing playbooks directory inside the container
+#   - Create a fresh destination directory
+#   - Extract the archive into the destination directory
+#   - Remove the temporary archive from the container
+# -----------------------------------------------------------------------------
+resource "null_resource" "deploy_playbooks" {
+
+  # Execute this resource only after the dependencies have been installed
+  # and the playbooks archive has been successfully created.
+  depends_on = [
+    null_resource.install_dependencies,
+    data.archive_file.playbooks
+  ]
+
+  # Re-run this resource whenever the contents of the playbooks directory
+  # change, as indicated by the archive SHA-256 checksum.
+  triggers = {
+    archive_hash = data.archive_file.playbooks.output_sha256
+  }
+
+  # SSH connection to the Proxmox VE host.
+  connection {
+    type        = "ssh"
+    host        = var.proxmox_ssh_endpoint
+    port        = var.proxmox_ssh_port
+    user        = var.proxmox_root_user
+    private_key = file(var.proxmox_ssh_key_path)
+  }
+
+  # Upload the generated playbooks archive to the Proxmox host.
+  provisioner "file" {
+    source      = data.archive_file.playbooks.output_path
+    destination = "/tmp/playbooks.tar.gz"
+  }
+
+  # Copy the archive into the LXC container, replace any existing playbooks,
+  # extract the archive, and remove the temporary archive afterwards.
+  provisioner "remote-exec" {
+    inline = [
+      # Copy the archive from the Proxmox host into the LXC container.
+      "pct push ${var.acn_vm_id} /tmp/playbooks.tar.gz /root/playbooks.tar.gz",
+
+      # Extract the archive into the destination directory.
+      "pct exec ${var.acn_vm_id} -- tar -xzf /root/playbooks.tar.gz -C /etc/ansible",
+
+      # Remove the temporary archive from the container.
+      "pct exec ${var.acn_vm_id} -- rm -f /root/playbooks.tar.gz"
+    ]
+  }
+}
