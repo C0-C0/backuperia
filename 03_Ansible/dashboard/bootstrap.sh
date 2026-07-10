@@ -168,5 +168,9 @@ fi
 
 echo
 echo "Done. Open $SEM_WEB_URL → project '$PROJECT_NAME' → template '$TEMPLATE_NAME' is ready to Run."
-[[ -z "$PROXMOX_TOKEN_SECRET" ]] && \
+# Use an if-block (not '[[ … ]] && echo'): as the script's last statement the
+# short-circuit form returns 1 whenever the token IS set, which under 'set -e'
+# fails the whole script — and thus the Terraform remote-exec that runs it.
+if [[ -z "$PROXMOX_TOKEN_SECRET" ]]; then
   echo "Note: set PROXMOX_TOKEN_SECRET (env or /etc/semaphore/semaphore.env) before the first real run."
+fi

@@ -184,3 +184,58 @@ resource "null_resource" "deploy_playbooks" {
     ]
   }
 }
+
+
+# -----------------------------------------------------------------------------
+# Dashboard Installation (Semaphore)
+# -----------------------------------------------------------------------------
+# This resource runs the dashboard install script inside the LXC container to
+# set up Ansible Semaphore (native, no Docker) and auto-provision the VM-Backup
+# template so it is ready to run.
+#
+# The script was deployed to /etc/ansible/dashboard/install.sh by the previous
+# resource. The container's root password is passed through as
+# SEM_ADMIN_PASSWORD so the script also creates the Semaphore admin user and
+# finishes provisioning in a single run. The Proxmox API token secret is passed
+# as PROXMOX_TOKEN_SECRET so the VM-Backup template is fully runnable after apply.
+#
+# The following actions are performed:
+#   - Wait until the playbooks (including the install script) have been deployed
+#   - Connect to the Proxmox VE host via SSH
+#   - Execute install.sh inside the container with SEM_ADMIN_PASSWORD and
+#     PROXMOX_TOKEN_SECRET set
+# -----------------------------------------------------------------------------
+resource "null_resource" "install_dashboard" {
+
+  # Execute this resource only after the playbooks (and thus the install script)
+  # have been deployed into the container.
+  depends_on = [
+    null_resource.deploy_playbooks
+  ]
+
+  # Re-run whenever the container is replaced or the deployed playbooks change,
+  # so the dashboard is (re)provisioned to match the current files.
+  triggers = {
+    container    = proxmox_virtual_environment_container.backuperia.id
+    archive_hash = data.archive_file.playbooks.output_sha256
+  }
+
+  # SSH connection to the Proxmox VE host.
+  connection {
+    type        = "ssh"
+    host        = var.proxmox_ssh_endpoint
+    port        = var.proxmox_ssh_port
+    user        = var.proxmox_root_user
+    private_key = file(var.proxmox_ssh_key_path)
+  }
+
+  # Run the install script inside the container. SEM_ADMIN_PASSWORD is set to the
+  # container root password so install.sh creates the Semaphore admin user, and
+  # PROXMOX_TOKEN_SECRET is injected into the Semaphore environment so the
+  # VM-Backup template can run without any further manual configuration.
+  provisioner "remote-exec" {
+    inline = [
+      "pct exec ${var.acn_vm_id} -- env SEM_ADMIN_PASSWORD='${var.acn_root_password}' PROXMOX_TOKEN_SECRET='${var.proxmox_api_token_secret}' bash /etc/ansible/dashboard/install.sh"
+    ]
+  }
+}

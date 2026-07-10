@@ -17,5 +17,10 @@
   "web_host": "http://localhost:3000",
   "port": ":3000",
 
+  "//schedule": "Timezone for cron schedules; without it Semaphore warns and uses UTC.",
+  "schedule": {
+    "timezone": "Europe/Zurich"
+  },
+
   "email_alert": false
 }

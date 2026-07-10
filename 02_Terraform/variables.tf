@@ -56,6 +56,12 @@ variable "proxmox_api_token" {
   sensitive   = true
 }
 
+variable "proxmox_api_token_secret" {
+  description = "Proxmox API token secret (UUID) used by the backup playbook. Injected into the Semaphore environment as PROXMOX_TOKEN_SECRET."
+  type        = string
+  sensitive   = true
+}
+
 variable "proxmox_bridge_name" {
   description = "Name of the Proxmox network bridge to which the container interface is connected."
   type        = string

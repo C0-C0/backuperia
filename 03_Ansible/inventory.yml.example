@@ -14,5 +14,7 @@ all:
         proxmox_api_user: ""
         # Proxmox API Token ID eg "ansible"
         proxmox_api_token_id: ""
-        # Proxmox API Token Secret
-        proxmox_api_token_secret: ""
+        # Proxmox API Token Secret — read from the environment, not stored here.
+        # Terraform passes it in (from terraform.tfvars: proxmox_api_token_secret)
+        # and Semaphore exposes it to the run as PROXMOX_TOKEN_SECRET.
+        proxmox_api_token_secret: "{{ lookup('env', 'PROXMOX_TOKEN_SECRET') }}"

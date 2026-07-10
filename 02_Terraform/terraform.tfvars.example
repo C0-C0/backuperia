@@ -14,6 +14,9 @@ acn_vm_id =
 
 # Proxmox related variables
 proxmox_api_endpoint  = ""
+proxmox_api_user      = ""
+proxmox_api_token_id  = ""
+proxmox_api_token_secret = ""  
 proxmox_api_token     = ""
 proxmox_bridge_name   = "vmbr0"
 proxmox_datastore     = "local-lvm"

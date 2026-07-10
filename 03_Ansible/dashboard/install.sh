@@ -64,8 +64,16 @@ if [[ -f "$CONFIG_DIR/config.json" ]] && grep -q '"bolt"' "$CONFIG_DIR/config.js
 fi
 # Detect the container's primary IP so the web UI's links/API base match the
 # address you actually browse to (a localhost web_host renders a blank page).
+# 'ip route get' returns the source IP of the default route and works even when
+# 'hostname -I' comes back empty on a fresh container — that empty result was
+# why the URL used to fall back to localhost and need a second run. Fall back to
+# 'hostname -I' if 'ip' is unavailable.
 # Override with:  WEB_HOST=http://my.host:3000 ./install.sh
-HOST_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+# The trailing '|| true' matters: under 'set -euo pipefail' a command-sub whose
+# command is missing (e.g. no 'ip' binary -> exit 127) or fails would otherwise
+# abort the whole script before the fallback runs.
+HOST_IP="$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.*src \([0-9.]*\).*/\1/p' | head -n1)" || true
+[[ -z "$HOST_IP" ]] && HOST_IP="$(hostname -I 2>/dev/null | awk '{print $1}')" || true
 WEB_HOST="${WEB_HOST:-http://${HOST_IP:-localhost}:3000}"
 
 if [[ ! -f "$CONFIG_DIR/config.json" ]]; then
@@ -91,6 +99,18 @@ else
   fi
 fi
 [[ -f "$CONFIG_DIR/semaphore.env" ]] || cp "$HERE/semaphore.env.example" "$CONFIG_DIR/semaphore.env"
+# If a token was passed in (e.g. by Terraform as PROXMOX_TOKEN_SECRET), write it
+# into semaphore.env so it replaces the example placeholder. This file is the
+# value sourced in step 6 and loaded by the systemd unit, so it must hold the
+# real token — otherwise the placeholder would win over the provided env var.
+if [[ -n "${PROXMOX_TOKEN_SECRET:-}" ]]; then
+  if grep -q '^PROXMOX_TOKEN_SECRET=' "$CONFIG_DIR/semaphore.env"; then
+    sed -i "s#^PROXMOX_TOKEN_SECRET=.*#PROXMOX_TOKEN_SECRET=${PROXMOX_TOKEN_SECRET}#" "$CONFIG_DIR/semaphore.env"
+  else
+    echo "PROXMOX_TOKEN_SECRET=${PROXMOX_TOKEN_SECRET}" >> "$CONFIG_DIR/semaphore.env"
+  fi
+  echo "    seeded PROXMOX_TOKEN_SECRET into $CONFIG_DIR/semaphore.env"
+fi
 chown -R semaphore:semaphore "$DATA_DIR" "$CONFIG_DIR"
 chmod 600 "$CONFIG_DIR/config.json" "$CONFIG_DIR/semaphore.env"
 
@@ -132,7 +152,22 @@ fi
 echo "==> 5/6 systemd service"
 install -m 0644 "$HERE/semaphore.service" /etc/systemd/system/semaphore.service
 systemctl daemon-reload
-systemctl enable --now semaphore
+systemctl enable semaphore
+# Use restart (not 'enable --now') so a web_host/config change made above always
+# takes effect in this same run — 'enable --now' is a no-op on an already-running
+# unit, which is why a corrected URL previously needed a second run.
+systemctl restart semaphore
+
+# Wait until the API answers before creating the admin / provisioning. On a fresh
+# install the DB is created and migrated on first start; 'user add' against a
+# not-yet-ready DB fails and would be misreported below as "already exists".
+SEM_URL="${SEM_URL:-http://localhost:3000}"
+echo "    waiting for Semaphore API at $SEM_URL"
+for i in $(seq 1 30); do
+  curl -fsS "$SEM_URL/api/ping" >/dev/null 2>&1 && break
+  sleep 1
+  [[ $i -eq 30 ]] && echo "    !! API not responding yet — continuing anyway" >&2
+done
 echo
 echo "Semaphore is running. Open the dashboard at:  ${WEB_HOST}"
 echo "(web_host in $CONFIG_DIR/config.json — re-run with WEB_HOST=... to change it.)"
@@ -145,16 +180,21 @@ echo "(web_host in $CONFIG_DIR/config.json — re-run with WEB_HOST=... to chang
 if [[ -n "${SEM_ADMIN_PASSWORD:-}" ]]; then
   SEM_ADMIN_LOGIN="${SEM_ADMIN_LOGIN:-admin}"
   echo "==> 6/6 Admin user + provisioning"
-  # Create the admin (idempotent: ignore "already exists").
-  sudo -u semaphore "$BIN" user add --admin --config "$CONFIG_DIR/config.json" \
-    --login "$SEM_ADMIN_LOGIN" --name Admin --email "${SEM_ADMIN_EMAIL:-admin@example.com}" \
-    --password "$SEM_ADMIN_PASSWORD" 2>/dev/null \
-    && echo "    created admin '$SEM_ADMIN_LOGIN'" \
-    || echo "    admin '$SEM_ADMIN_LOGIN' already exists — continuing"
+  # Create the admin. Idempotent, but distinguish a real failure from a genuine
+  # "already exists" so a broken run isn't silently reported as success.
+  if admin_out="$(sudo -u semaphore "$BIN" user add --admin --config "$CONFIG_DIR/config.json" \
+      --login "$SEM_ADMIN_LOGIN" --name Admin --email "${SEM_ADMIN_EMAIL:-admin@example.com}" \
+      --password "$SEM_ADMIN_PASSWORD" 2>&1)"; then
+    echo "    created admin '$SEM_ADMIN_LOGIN'"
+  elif echo "$admin_out" | grep -qi 'exist'; then
+    echo "    admin '$SEM_ADMIN_LOGIN' already exists — continuing"
+  else
+    echo "    !! could not create admin '$SEM_ADMIN_LOGIN': $admin_out" >&2
+  fi
   # Seed project/repo/inventory/environment/template via the API.
   # Pull the Proxmox token from semaphore.env if present so it lands in the UI env.
   [[ -f "$CONFIG_DIR/semaphore.env" ]] && . "$CONFIG_DIR/semaphore.env" 2>/dev/null || true
-  SEM_URL="${SEM_URL:-http://localhost:3000}" SEM_WEB_URL="$WEB_HOST" \
+  SEM_URL="$SEM_URL" SEM_WEB_URL="$WEB_HOST" \
   SEM_ADMIN_LOGIN="$SEM_ADMIN_LOGIN" SEM_ADMIN_PASSWORD="$SEM_ADMIN_PASSWORD" \
   GIT_URL="${GIT_URL:-$REPO_PATH}" GIT_BRANCH="${GIT_BRANCH:-main}" \
   GIT_SSH_KEY_FILE="${GIT_SSH_KEY_FILE:-}" \
