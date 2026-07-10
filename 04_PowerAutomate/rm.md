@@ -57,7 +57,7 @@ IF (File.IfFile.Exists File: $'''%TF_WORKDIR%\\terraform.tfvars''') THEN
 ELSE
     File.ReadTextFromFile.ReadText File: $'''%TF_WORKDIR%\\terraform.tfvars.example''' Encoding: File.TextFileEncoding.UTF8 Content=> tfvarsExample
     Display.InputDialog Title: $'''Container ID''' Message: $'''Bitte gib eine ID für den Container an.''' DefaultValue: 201 InputType: Display.InputType.SingleLine IsTopMost: False UserInput=> acn_vm_id ButtonPressed=> ButtonPressed2
-    Text.Replace.ReplaceText Text: tfvarsExample TextToFind: $'''acn_vm_id = ''' IgnoreCase: False ReplaceWith: $'''acn_vm_id = \"%acn_vm_id%\"''' ActivateEscapeSequences: False ComparisonType: Text.TextComparisonType.Ordinal Result=> tfvarsFilled
+    Text.Replace.ReplaceText Text: tfvarsExample TextToFind: $'''acn_vm_id = ''' IgnoreCase: False ReplaceWith: $'''acn_vm_id = %acn_vm_id%''' ActivateEscapeSequences: False ComparisonType: Text.TextComparisonType.Ordinal Result=> tfvarsFilled
     Display.InputDialog Title: $'''acn_root_password angeben''' Message: $'''Bitte gib ein Passwort für den Root Account des ACN''' InputType: Display.InputType.Password IsTopMost: False UserInput=> acn_root_password ButtonPressed=> ButtonPressed2
     Text.Replace.ReplaceText Text: tfvarsFilled TextToFind: $'''acn_root_password = \"\"''' IgnoreCase: False ReplaceWith: $'''acn_root_password = \"%acn_root_password%\"''' ActivateEscapeSequences: False ComparisonType: Text.TextComparisonType.Ordinal Result=> tfvarsFilled
     Display.InputDialog Title: $'''Proxmox Endpoint''' Message: $'''Bitte Proxmox API-URL angeben (z.B. https://192.168.1.10:8006/)''' InputType: Display.InputType.SingleLine IsTopMost: False UserInput=> proxmox_api_endpoint ButtonPressed=> ButtonPressed2
@@ -120,7 +120,7 @@ IF ApplyConfirm <> $'''Ja''' THEN
     Display.ShowMessageDialog.ShowMessage Title: $'''Abgebrochen''' Message: $'''Apply wurde vom Benutzer abgebrochen.''' Icon: Display.Icon.Information Buttons: Display.Buttons.OK DefaultButton: Display.DefaultButton.Button1 IsTopMost: False ButtonPressed=> ButtonPressed4
     EXIT Code: 0 ErrorMessage: $''''''
 END
-Scripting.RunDOSCommand.RunDOSCommand DOSCommandOrApplication: $'''cmd.exe /c %TFexe% apply -auto-approve -input=false''' WorkingDirectory: TF_WORKDIR StandardOutput=> CommandOutputTFapply StandardError=> CommandErrorOutputTFapply ExitCode=> CommandExitCodeTFapply
+Scripting.RunDOSCommand.RunDOSCommand DOSCommandOrApplication: $'''cmd.exe /c %TFexe% apply -auto-approve -replace=null_resource.install_dependencies -replace=null_resource.deploy_playbooks ''' WorkingDirectory: TF_WORKDIR StandardOutput=> CommandOutputTFapply StandardError=> CommandErrorOutputTFapply ExitCode=> CommandExitCodeTFapply
 IF CommandExitCodeTFapply <> 0 THEN
     Display.ShowMessageDialog.ShowMessage Title: $'''Apply Fehlgeschlagen''' Message: $'''Terraform apply fehlgeschlagen: %CommandErrorOutputTFapply%''' Icon: Display.Icon.ErrorIcon Buttons: Display.Buttons.OK DefaultButton: Display.DefaultButton.Button1 IsTopMost: False ButtonPressed=> ButtonPressed3
     EXIT Code: 1 ErrorMessage: $'''Apply Fehlgeschlagen'''
