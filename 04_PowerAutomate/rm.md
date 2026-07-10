@@ -31,6 +31,7 @@ SET proxmox_ssh_key_path TO $'''%UserProfile%\\.ssh\\id_ed25519'''
 # .ssh-Ordner anlegen, falls nicht vorhanden
 Scripting.RunDOSCommand.RunDOSCommand DOSCommandOrApplication: $'''cmd.exe /c if not exist \"%UserProfile%\\.ssh\" mkdir \"%UserProfile%\\.ssh\"''' StandardOutput=> CommandOutputSshDir StandardError=> CommandErrorOutputSshDir ExitCode=> CommandExitCodeSshDir
 # Key nur erzeugen, wenn noch KEINER existiert (Exists + ELSE)
+Text.Replace.ReplaceText Text: UserProfile TextToFind: $'''\\''' IgnoreCase: False ReplaceWith: $'''/''' ActivateEscapeSequences: False ComparisonType: Text.TextComparisonType.Ordinal Result=> UserProfileSlash
 IF (File.IfFile.Exists File: $'''%UserProfile%\\.ssh\\id_ed25519''') THEN
 ELSE
     Scripting.RunDOSCommand.RunDOSCommand DOSCommandOrApplication: $'''cmd.exe /c ssh-keygen -t ed25519 -f \"%UserProfile%\\.ssh\\id_ed25519\" -N \"\" -q 2>&1''' StandardOutput=> CommandOutputKeygen StandardError=> CommandErrorOutputKeygen ExitCode=> CommandExitCodeKeygen
@@ -82,6 +83,7 @@ END
 # Schritt 5: inventory.yml aus Vorlage erzeugen (Ansible)
 # Passe INV_DIR an, wo die inventory.yml.example liegt (z.B. %TF_DIR%\03_Ansible)
 SET INV_DIR TO $'''%TF_DIR%\\03_Ansible'''
+Folder.Create FolderPath: TF_WORKDIR FolderName: $'''playbooks'''
 Folder.Copy Folder: $'''%INV_DIR%\\dashboard''' Destination: $'''%TF_WORKDIR%\\playbooks''' IfFolderExists: Folder.IfExists.Overwrite
 File.Copy Files: $'''%INV_DIR%\\*''' Destination: $'''%TF_WORKDIR%\\playbooks''' IfFileExists: File.IfExists.Overwrite
 # Überspringen wenn inventory.yml schon konfiguriert wurde
@@ -100,7 +102,7 @@ ELSE
     Text.Replace.ReplaceText Text: invFilled TextToFind: $'''proxmox_api_token_id: \"\"''' IgnoreCase: False ReplaceWith: $'''proxmox_api_token_id: \"%proxmox_api_token_id%\"''' ActivateEscapeSequences: False ComparisonType: Text.TextComparisonType.Ordinal Result=> invFilled
     DISABLE Display.InputDialog Title: $'''Proxmox API Token Secret''' Message: $'''API Token Secret angeben.''' InputType: Display.InputType.Password IsTopMost: False UserInput=> proxmox_api_token_secret ButtonPressed=> ButtonPressedInv
     Text.Replace.ReplaceText Text: invFilled TextToFind: $'''proxmox_api_token_secret: \"\"''' IgnoreCase: False ReplaceWith: $'''proxmox_api_token_secret: \"%proxmox_api_token_secret%\"''' ActivateEscapeSequences: False ComparisonType: Text.TextComparisonType.Ordinal Result=> invFilled
-    File.WriteText File: $'''%INV_DIR%\\inventory.yml''' TextToWrite: invFilled AppendNewLine: True IfFileExists: File.IfFileExists.Overwrite Encoding: File.FileEncoding.UTF8
+    File.WriteText File: $'''%TF_WORKDIR%\\playbooks\\inventory.yml''' TextToWrite: invFilled AppendNewLine: True IfFileExists: File.IfFileExists.Overwrite Encoding: File.FileEncoding.UTF8
 END
 # Schritt 4: Terraform ausführen (im Unterordner 02_Terraform)
 Scripting.RunDOSCommand.RunDOSCommand DOSCommandOrApplication: $'''cmd.exe /c %TFexe% init -upgrade -input=false''' WorkingDirectory: TF_WORKDIR StandardOutput=> CommandOutputTFinit StandardError=> CommandErrorOutputTFinit ExitCode=> CommandExitCodeTFinit
